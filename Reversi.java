@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 
@@ -17,6 +18,7 @@ public class Reversi extends Thread {
     private static final char BLACK = 'B';
     private static final char WHITE = 'W';
     private static int port;// port passed in from console
+    private static int udpPort;
     private static boolean playingGame = true;
     private static boolean UDPConnected = false;
     private static boolean TCPConnected = false;
@@ -51,66 +53,51 @@ public class Reversi extends Thread {
 
             try (DatagramSocket UDPSock = new DatagramSocket(port)) {
                 byte[] send = new byte[256]; //send buffer
-                send = new String("NEWGAME:"+ port).getBytes();
+                send = new String("NEWGAME:" + port).getBytes();
                 byte[] recieve = new byte[256];// recieve message buffer
 
                 UDPSock.setSoTimeout(WAIT_TIME);//wait that 5 seconds
 
-                while (!UDPSock.isClosed() && !UDPConnected) {
+                while (!UDPConnected) {
 
                     InetAddress address = InetAddress.getByName(addressIP);
-                    DatagramPacket gamePacket = new DatagramPacket(send, send.length, address, port);//UDP NEWGAME packet to be sent out
+                    DatagramPacket gamePacket = new DatagramPacket(send, send.length, address, port); // UDP NEWGAME packet to be sent out
                     UDPSock.send(gamePacket);
                     System.out.println("[SENT]: NEWGAME TO " + port);
 
                     try {
-                        //wait for response
+                        // wait for response
                         DatagramPacket udpPacket = new DatagramPacket(recieve, recieve.length);
                         UDPSock.receive(udpPacket);
                         String received = new String(udpPacket.getData(), 0, udpPacket.getLength());
                         if (received.contains("NEWGAME")) {
                             System.out.println("Message from: " + udpPacket.getAddress() + " : " + udpPacket.getPort());
                             gameAddress = udpPacket.getAddress();
-                            port = udpPacket.getPort();
+                            udpPort = udpPacket.getPort();
                             System.out.println("LET THE GAMES BEGIN");
                             UDPConnected = true;
+                            System.out.println("Sent port for tcp connection");
+                            tcpConnection(udpPort, gameAddress);
                             //newBoard(reversiBoard);
                             //printBoard(reversiBoard);
-
                         }
                     } catch (SocketTimeoutException e) {
                         System.out.println("UDP Socket has timed out.......");
+                        break; // exit the loop if socket times out
                     }
                 }
 
             } catch (Exception e) {
                 System.out.println("Match Making with UDP has Failed.....");
             }
-            
-            if(UDPConnected)
+
+            if (UDPConnected) {
+
+                tcpConnection(udpPort,gameAddress);
+
+            } else if (!UDPConnected) //try tcp connection
             {
-                Thread TCPThread = new Thread(() -> {
-                    try(Socket TCPSock = new Socket(gameAddress.getHostAddress(), port);
-                    PrintWriter out = new PrintWriter(TCPSock.getOutputStream(),true);
-                    BufferedReader in = new BufferedReader(new InputStreamReader(TCPSock.getInputStream()));
-                    ) {
-                        String player1Responese = in.readLine();
-                        System.out.println("Player1: " + player1Responese); //See what player1 responded with
-
-                        out.println("MOVE: 2,3");
-                        
-                    } catch (IOException e) {
-                        //System.out.println("[TCP]: Unable to connect to host, retry matchmaking");
-                        System.out.println(e.getMessage());
-                    }
-                });
-                TCPThread.start();
-                try {
-                    TCPThread.join();
-                } catch (Exception e) {
-
-                }
-                
+                tcpConnection(ranPort(),gameAddress);
             }
         }
     }
@@ -176,17 +163,60 @@ public class Reversi extends Thread {
     public static void newBoard(char[][] reversiBoard) {
         int middle = BOARD / 2; //get the middle of the board
 
+        // Initialize the entire board with blanks
         for (int i = 0; i < BOARD; i++) {
-            reversiBoard[i][i] = BLANK.charAt(0);//put spaces on baord
+            for (int j = 0; j < BOARD; j++) {
+                reversiBoard[i][j] = BLANK.charAt(0);
+            }
         }
+        
+        // Set up the initial Reversi configuration
         reversiBoard[middle - 1][middle - 1] = WHITE; // (3,3)
-        reversiBoard[middle][middle] = WHITE;
-        reversiBoard[middle - 1][middle] = BLACK;
-        reversiBoard[middle][middle - 1] = BLACK;
+        reversiBoard[middle][middle] = WHITE;         // (4,4)
+        reversiBoard[middle - 1][middle] = BLACK;     // (3,4)
+        reversiBoard[middle][middle - 1] = BLACK;     // (4,3)
     }
 
     public static int ranPort() {
         int gamePort = (int) ((Math.random() * 100) + 9000);
         return gamePort;
     }
+
+    public static void tcpConnection(int port, InetAddress gamAddress) {
+        try (ServerSocket tcpSocket = new ServerSocket(port, BOARD, gamAddress)) {
+            tcpSocket.setSoTimeout(WAIT_TIME);
+            System.out.println("[TCP]: Waiting for connection on port " + port);
+
+            Socket clientTCP = tcpSocket.accept();
+            System.out.println("[TCP]: Client connected from " + clientTCP.getRemoteSocketAddress());
+
+            if (clientTCP.isConnected()) {
+                TCPConnected = true;
+
+                try (
+                    PrintWriter out = new PrintWriter(clientTCP.getOutputStream(), true); 
+                    BufferedReader in = new BufferedReader(new InputStreamReader(clientTCP.getInputStream()));
+                ) {
+                    String player1Response = in.readLine();
+                    System.out.println("Player1: " + player1Response); //See what player1 responded with
+
+                    out.println("MOVE: 2,3");
+                    String response = in.readLine();
+                    System.out.println("[RESPONSE] "+response);
+                    // Set TCPConnected to false after communication
+                    TCPConnected = false;
+
+                } catch (IOException e) {
+                    System.out.println("[TCP]: Communication error - " + e.getMessage());
+                    TCPConnected = false;
+                }
+            }
+        } catch(Exception e)
+        {
+            System.out.println("[TCP ERROR]: " + e.getMessage());
+            UDPConnected = false;
+            TCPConnected = false;
+        }
+    }
 }
+

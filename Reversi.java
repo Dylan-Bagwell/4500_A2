@@ -1,5 +1,10 @@
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -17,14 +22,14 @@ public class Reversi extends Thread {
     private static final char WHITE = 'W';
     private static int port;// port passed in from console
     private static int udpPort;
-    private static boolean playingGame = true;
+    private static boolean playingGame = false;
     private static boolean connected = false;
     private static boolean TCPConnected = false;
     private static char[][] reversiBoard = new char[BOARD][BOARD];//Reversi Board
     public static InetAddress gameAddress;// ip address recieved
     public static String addressIp;//my address entered in the command line
-    String clientInput;
-    String[] parts;
+    public static String response; 
+    public static String[] parts;
 
     // public Reversi(String ipAddress, int port) //Constructor of the game Reversi
     // {
@@ -109,7 +114,10 @@ public class Reversi extends Thread {
                 gameSocket = new Socket(senderAddress, tcpPort);
                 System.out.println("[TCP CONNECTED]: " + senderAddress + " on port " + tcpPort);
 
-                TCPConnected = true;
+                TCPConnected = true;// we have connected 
+                playingGame = true; //we found a game to play
+                newBoard(reversiBoard);
+                printBoard(reversiBoard);
                 // your player 2 so wait for p1 move
                 System.out.println("You are Player 2 (White). Waiting for Player 1 (Black) to make a move...");
                 player2();
@@ -154,20 +162,13 @@ public class Reversi extends Thread {
             } catch (InterruptedException e) {
                 System.out.println("Could not join UDP thread.");
             }
+
+            //initialize game 
             newBoard(reversiBoard);
             printBoard(reversiBoard);
-
-            // game input logic here 
-            // player 1 needs to make a move
+            playingGame = true; // we are now playing the game
             player1();
-            // try {
-            //     BufferedWriter bufferW = new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream()));   
-            //     bufferW.write("MOVE:4,3\n");
-            //     System.out.println("Sent MOVE:4,3");
-            //     bufferW.flush();
-            // } catch (Exception e) {
-            //     System.out.println("[TCP ERROR]: Could not send move to opponent.");
-            // }
+
         } else if (!TCPConnected) {
             System.out.println("[TCP] Could not establish TCP connection, continuing UDP broadcast...");
         }
@@ -242,13 +243,54 @@ public class Reversi extends Thread {
 
     public static void player1() {
         //first move logic here
-        System.out.println("In Player 1 method");
+        System.out.println("You are Player 1 (Black), you make the first move!");
+
+        try(BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream()));
+            PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true);
+            BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
+        ) {
+            while (playingGame) {
+                printBoard(reversiBoard);
+                System.out.println("Enter your move row,col: ex) 4,3");
+                System.out.print("Your Move: ");
+                String move = console.readLine();
+                out.println("MOVE:" + move);
+                System.out.println("Sent:" + move);
+                System.out.print("Wait:....");
+                response = in.readLine();
+                System.out.println("Received: " + response);
+            }
+        } catch (Exception e) {
+            System.out.println("Error has occured in game, exiting...");
+            System.exit(0);
+        }
 
     }
 
     public static void player2() {
-        System.out.println("In Player 2 method");
+        System.out.println("Waiting for Player 1 (Black) to make a move...");
         //wait for move from player 1
+        try(BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream()));
+            PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true);
+            BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
+        ) {
+            while (playingGame) {
+                printBoard(reversiBoard);
+                System.out.print(" Wait....");
+                String response = in.readLine();
+                System.out.println("Received: " + response);
+                System.out.println("Enter your move row,col: ex) 4,3");
+                System.out.print("Your Move: ");
+                String command = console.readLine();
+                out.println("MOVE:" + command);
+                System.out.println("Sent MOVE:" + command);
+                System.out.println(" Wait for Player 2");
+
+            }
+        } catch (Exception e) {
+            System.out.println("Error has occured in game, exiting...");
+            System.exit(0);
+        }
     }
 
     public static int ranPort() {

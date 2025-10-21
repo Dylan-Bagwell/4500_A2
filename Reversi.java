@@ -1,7 +1,5 @@
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -28,14 +26,13 @@ public class Reversi extends Thread {
     String clientInput;
     String[] parts;
 
-    public Reversi(String ipAddress, int port) //Constructor of the game Reversi
-    {
-        try (Socket gameSocket = new Socket(ipAddress, port)) {
-            System.out.println("[CONNECTED]: " + ipAddress + " on port " + port);
-        } catch (IOException e) {
-        }
-    }
-
+    // public Reversi(String ipAddress, int port) //Constructor of the game Reversi
+    // {
+    //     try (Socket gameSocket = new Socket(ipAddress, port)) {
+    //         System.out.println("[CONNECTED]: " + ipAddress + " on port " + port);
+    //     } catch (IOException e) {
+    //     }
+    // }
     public static void main(String[] args) {
         if (args.length != 2) {
             System.out.println("[Expected]: <BROADCAST ADDRESS> <PORT>");
@@ -53,14 +50,16 @@ public class Reversi extends Thread {
         addressIp = args[0];
         //listen on udp port for a tcp port to play on to be player2
         listen(port); // listen for incoming connections
-        try {
-            DatagramSocket UDPSock = new DatagramSocket(null);
-            UDPSock.setSoTimeout(WAIT_TIME);// time socked out after 5 seconds
-            UDPSock.setBroadcast(true);
-            udpBroadcast(UDPSock, port);
-        } catch (Exception e) {
-            System.exit(0);
-        }
+        if (!TCPConnected) {
+            try {
+                DatagramSocket UDPSock = new DatagramSocket(null);
+                UDPSock.setSoTimeout(WAIT_TIME);// time socked out after 5 seconds
+                UDPSock.setBroadcast(true);
+                udpBroadcast(UDPSock, port);
+            } catch (Exception e) {
+                System.exit(0);
+            }
+        } // if no connection established then broadcast udp to find player1
 
     }
 
@@ -80,17 +79,17 @@ public class Reversi extends Thread {
             System.out.println("[TCP CONNECTED]: " + addressIp + " on port " + port);
             TCPConnected = true;
         } catch (SocketException e) {
-            System.err.println("[TCP ERROR]: TCP Timed out on " + port);
+            System.err.println("[TCP SOCKET ERROR]: TCP Timed out on " + port);
             TCPConnected = false;
         } catch (IOException e) {
-            System.err.println("[TCP ERROR]: Could not connect to " + addressIp + " on port " + port);
+            System.err.println("[TCP IO EXCEPTION]: Could not connect to " + addressIp + " on port " + port);
         }
 
     }
 
     public static void listen(int port) {
         // Listening for incoming TCP connections
-        try  {
+        try {
             DatagramSocket listenSock = new DatagramSocket(null);
             listenSock.setSoTimeout(WAIT_TIME);// time socked out after 5 seconds
             byte[] recieve = new byte[1024];//byte buffer to hold message
@@ -109,10 +108,11 @@ public class Reversi extends Thread {
                 // Attempt to establish TCP connection
                 gameSocket = new Socket(senderAddress, tcpPort);
                 System.out.println("[TCP CONNECTED]: " + senderAddress + " on port " + tcpPort);
-                
+
                 TCPConnected = true;
                 // your player 2 so wait for p1 move
-                // waitforMove();
+                System.out.println("You are Player 2 (White). Waiting for Player 1 (Black) to make a move...");
+                player2();
             }
 
         } catch (SocketException e) {
@@ -123,7 +123,7 @@ public class Reversi extends Thread {
     }
 
     public static void udpBroadcast(DatagramSocket UDPSock, int port) {
-        System.out.println("UDP COnnection");
+        System.out.println("UDP BroadCasting");
         int random = ranPort();
 
         Thread UDPSend = new Thread(() -> {
@@ -135,12 +135,12 @@ public class Reversi extends Thread {
                         port);
 
                 System.out.print("Sending UDP Paket to " + port);
-                while (true) {
+                while (!Thread.currentThread().isInterrupted() && !TCPConnected) {
                     UDPSock.send(sendPack);
                 }
 
             } catch (Exception e) {
-                System.err.println("[UDP ERROR]: Could not open UDP socket on port " + port);
+                System.err.println("Could not open UDP socket on port " + port);
             }
         });
         UDPSend.start();
@@ -149,19 +149,25 @@ public class Reversi extends Thread {
 
         if (TCPConnected) { // if we are player 1
             UDPSend.interrupt();
+            try {
+                UDPSend.join();
+            } catch (InterruptedException e) {
+                System.out.println("Could not join UDP thread.");
+            }
             newBoard(reversiBoard);
             printBoard(reversiBoard);
 
             // game input logic here 
             // player 1 needs to make a move
-            // makemove();
-            try {
-                BufferedWriter bufferW = new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream()));   
-                bufferW.write("MOVE:4,3\n");
-                System.out.println("Sent MOVE:4,3");
-                bufferW.flush();
-            } catch (Exception e) {
-            }
+            player1();
+            // try {
+            //     BufferedWriter bufferW = new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream()));   
+            //     bufferW.write("MOVE:4,3\n");
+            //     System.out.println("Sent MOVE:4,3");
+            //     bufferW.flush();
+            // } catch (Exception e) {
+            //     System.out.println("[TCP ERROR]: Could not send move to opponent.");
+            // }
         } else if (!TCPConnected) {
             System.out.println("[TCP] Could not establish TCP connection, continuing UDP broadcast...");
         }
@@ -174,7 +180,7 @@ public class Reversi extends Thread {
         System.out.println();
 
         // Top border
-        System.out.print("  +");
+        System.out.print("   +");
         for (int col = 0; col < 8; col++) {
             System.out.print("---+");
         }
@@ -234,9 +240,25 @@ public class Reversi extends Thread {
         reversiBoard[middle][middle - 1] = BLACK;     // (4,3)
     }
 
+    public static void player1() {
+        //first move logic here
+        System.out.println("In Player 1 method");
+
+    }
+
+    public static void player2() {
+        System.out.println("In Player 2 method");
+        //wait for move from player 1
+    }
+
     public static int ranPort() {
         int gamePort = (int) ((Math.random() * 100) + 9000);
         return gamePort;
+    }
+
+    //check incoming message for validity
+    public static void checkMessage(String message) {
+
     }
 
 }

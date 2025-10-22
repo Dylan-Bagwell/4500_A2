@@ -299,7 +299,34 @@ public class Reversi extends Thread {
     }
 
     //check incoming message for validity
-    public static void checkMessage(String message) {
+    public static String checkMessage(String message) {
+
+        switch (parts[0]) {
+            case "MOVE":
+                System.out.println("Move received: " + parts[1]);
+                return "VALID MOVE";
+            case "PASS":
+                System.out.println("Move received: " + parts[1]);
+                return "VALID PASS";
+            case "YOU WIN":
+                System.out.println("You Win!");
+                playingGame = false;
+                return "YOU WIN";
+            case "YOU LOSE":
+                System.out.println("You Lose!");
+                playingGame = false;
+                return "YOU LOSE";
+            case "DRAW":
+                System.out.println("Game is a Draw!");
+                playingGame = false;
+                return "DRAW";
+            case "ERROR":
+                System.out.println("Error received: " + parts[1]);
+                System.exit(0);
+            default:
+                System.out.println("Invalid message received.");
+                return "ERROR";
+        }
 
     }
 

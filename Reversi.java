@@ -186,9 +186,9 @@ public class Reversi extends Thread {
             System.out.printf("%3d |", row + 1);  // <-- padded row number
             for (int col = 0; col < 8; col++) {
                 System.out.printf(" %c |", reversiBoard[row][col]);
-                if (reversiBoard[row][col] == 'x' || reversiBoard[row][col] == 'X') {
-                    reversiBoard[row][col] = BLANK; // reset valid move markers
-                }
+                // if (reversiBoard[row][col] == 'x' || reversiBoard[row][col] == 'X') {
+                //     reversiBoard[row][col] = BLANK; // reset valid move markers
+                // }
             }
             System.out.println();
 
@@ -245,12 +245,20 @@ public class Reversi extends Thread {
 
         System.out.println("Updating board with move: " + row + "," + col + " for player: " + playerColor);
 
+        // Clear ALL valid move markers before updating
+        for (int i = 0; i < BOARD; i++) {
+            for (int j = 0; j < BOARD; j++) {
+                if (reversiBoard[i][j] == 'x' || reversiBoard[i][j] == 'X') {
+                    reversiBoard[i][j] = BLANK;
+                }
+            }
+        }
+
         reversiBoard[row - 1][col - 1] = playerColor; // place the player's piece
-        
+
         // hashmap.get that position arraylist
         // hashmap <position> <arraylist>
         // for each position in list set to playerColor
-
         String key = "(" + row + "," + col + ")";
         ArrayList<String> posFlip = moveMap.get(key);//postions to be flipped
         if (posFlip != null) {
@@ -275,10 +283,10 @@ public class Reversi extends Thread {
 
     public static void setValidMoves(char playerColor) {
         clearValidMoves();
-        moveMap.clear(); //temp remove it doesnt work
+        moveMap.clear();
         // Set valid moves logic here
-        for (int i = 1; i < BOARD; i++) {
-            for (int k = 1; k < BOARD; k++) {
+        for (int i = 1; i <= BOARD; i++) {
+            for (int k = 1; k <= BOARD; k++) {
                 validMove(i, k, playerColor);
             }
         }
@@ -287,173 +295,176 @@ public class Reversi extends Thread {
     public static boolean validMove(int row, int col, char playerColor) {
 
         //for a color there is a horizontal vertical or diagonal line of opponent pieces
-        if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
-            System.out.println("MOVE coordinates out of bounds.");
-            return false;
-        }
-        if (playerColor == BLACK) {
-            for (int i = 0; i < BOARD; i++) {
-                boolean hasOpponentPieceBetween = false;
-                for (int k = 0; k < BOARD; k++) {
-                    for (int[] dir : directions) {
-                        if (reversiBoard[i][k] != BLACK) {
-                            continue; // Skip non-empty cells
-                        }
-                        int x = i + dir[0];// -1 coming from here
-                        int y = k + dir[1];
-                        if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-                            continue;
-                        }
-                        if (reversiBoard[x][y] == BLANK) {
-                            continue;
-                        }
-                        if (reversiBoard[x][y] == WHITE) {
-                            ArrayList<String> positions = new ArrayList<>();
-                            positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-                            hasOpponentPieceBetween = true;
-                            while (true) {
-                                x += dir[0];
-                                y += dir[1];
-                                if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-                                    break;
-                                }
-                                if (reversiBoard[x][y] == BLACK) {
-                                    hasOpponentPieceBetween = false;
-                                    break;
-                                } else if (reversiBoard[x][y] == BLANK) {
-                                    if (hasOpponentPieceBetween) {
-                                        player1Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
-                                        reversiBoard[x][y] = 'x'; // Mark valid move on board
-                                        moveMap.put(player1Moves[x][y], positions);
-                                    }
-                                    hasOpponentPieceBetween = false;
-                                    break;
-                                } else if (reversiBoard[x][y] == WHITE) {
-                                    // continue searching
-                                    positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-                                    continue;
-                                }
-                                break;
-                            }
-                        } else {
-                            hasOpponentPieceBetween = false;
-                            continue; // No opponent pieces in between
-                        }
-                    }
-                }
-            }
-        } else if (playerColor == WHITE) {
-            for (int i = 0; i < BOARD; i++) {
-                boolean hasOpponentPieceBetween = false;
-                for (int k = 0; k < BOARD; k++) {
-                    for (int[] dir : directions) {
-                        if (reversiBoard[i][k] != WHITE) {
-                            continue; // Skip non-empty cells
-                        }
-                        int x = i + dir[0];// -1 coming from here
-                        int y = k + dir[1];
-                        //System.out.println("Checking direction: " + dir[0] + "," + dir[1] + " from position: " + i + "," + k);
-                        if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-                            continue;
-                        }
-                        if (reversiBoard[x][y] == BLANK) {
-                            continue;
-                        }
-                        if (reversiBoard[x][y] == BLACK) {
-                            ArrayList<String> positions = new ArrayList<>();
-                            positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-                            hasOpponentPieceBetween = true;
-                            while (true) {
-                                x += dir[0];
-                                y += dir[1];
-                                if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-                                    break;
-                                }
-                                if (reversiBoard[x][y] == WHITE) {
-                                    hasOpponentPieceBetween = false;
-                                    break;
-                                } else if (reversiBoard[x][y] == BLANK) {
-                                    if (hasOpponentPieceBetween) {
-                                        player2Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
-                                        reversiBoard[x][y] = 'X';
-                                        moveMap.put(player1Moves[x][y], positions);
-                                    }
-                                    hasOpponentPieceBetween = false;
-                                    break;
-                                } else if (reversiBoard[x][y] == BLACK) {
-                                    // continue searching
-                                    positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-                                    continue;
-                                }
-                                break;
-                            }
-                        } else {
-                            hasOpponentPieceBetween = false;
-                            continue; // No opponent pieces in between
-                        }
-                    }
-                }
-            }
-        }
-        return true; // Placeholder
-        //temp logic to test valid moves
         // if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
-        //     return false; // Out of bounds
-        // }
-
-        // int r = row - 1; // Convert to 0-based index
-        // int c = col - 1;
-
-        // // Target cell must be empty
-        // if (reversiBoard[r][c] != BLANK) {
+        //     System.out.println("MOVE coordinates out of bounds.");
         //     return false;
         // }
-
-        // char opp = (playerColor == BLACK) ? WHITE : BLACK;
-        // ArrayList<String> positionsToFlip = new ArrayList<>();
-
-        // // Check all 8 directions
-        // for (int[] dir : directions) {
-        //     int x = r + dir[0];
-        //     int y = c + dir[1];
-        //     boolean foundOpponent = false;
-        //     ArrayList<String> tempPositions = new ArrayList<>();
-
-        //     // Traverse in the current direction
-        //     while (x >= 0 && x < BOARD && y >= 0 && y < BOARD && reversiBoard[x][y] == opp) {
-        //         foundOpponent = true;
-        //         tempPositions.add("(" + (x + 1) + "," + (y + 1) + ")");
-        //         x += dir[0];
-        //         y += dir[1];
+        // if (playerColor == BLACK) {
+        //     for (int i = 0; i < BOARD; i++) {
+        //         boolean hasOpponentPieceBetween = false;
+        //         for (int k = 0; k < BOARD; k++) {
+        //             for (int[] dir : directions) {
+        //                 if (reversiBoard[i][k] != BLACK) {
+        //                     continue; // Skip non-empty cells
+        //                 }
+        //                 int x = i + dir[0];// -1 coming from here
+        //                 int y = k + dir[1];
+        //                 if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
+        //                     continue;
+        //                 }
+        //                 if (reversiBoard[x][y] == BLANK) {
+        //                     continue;
+        //                 }
+        //                 if (reversiBoard[x][y] == WHITE) {
+        //                     ArrayList<String> positions = new ArrayList<>();
+        //                     positions.add("(" + (x + 1) + "," + (y + 1) + ")");
+        //                     hasOpponentPieceBetween = true;
+        //                     while (true) {
+        //                         x += dir[0];
+        //                         y += dir[1];
+        //                         if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
+        //                             break;
+        //                         }
+        //                         if (reversiBoard[x][y] == BLACK) {
+        //                             hasOpponentPieceBetween = false;
+        //                             break;
+        //                         } else if (reversiBoard[x][y] == BLANK) {
+        //                             if (hasOpponentPieceBetween) {
+        //                                 player1Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
+        //                                 reversiBoard[x][y] = 'x'; // Mark valid move on board
+        //                                 moveMap.put(player1Moves[row][col], positions);
+        //                             }
+        //                             hasOpponentPieceBetween = false;
+        //                             break;
+        //                         } else if (reversiBoard[x][y] == WHITE) {
+        //                             // continue searching
+        //                             positions.add("(" + (x + 1) + "," + (y + 1) + ")");
+        //                             continue;
+        //                         }
+        //                         break;
+        //                     }
+        //                 } else {
+        //                     hasOpponentPieceBetween = false;
+        //                     continue; // No opponent pieces in between
+        //                 }
+        //             }
+        //         }
         //     }
-
-        //     // If we find a player's piece after opponent pieces, it's a valid move
-        //     if (foundOpponent && x >= 0 && x < BOARD && y >= 0 && y < BOARD && reversiBoard[x][y] == playerColor) {
-        //         positionsToFlip.addAll(tempPositions);
+        // } else if (playerColor == WHITE) {
+        //     for (int i = 0; i < BOARD; i++) {
+        //         boolean hasOpponentPieceBetween = false;
+        //         for (int k = 0; k < BOARD; k++) {
+        //             for (int[] dir : directions) {
+        //                 if (reversiBoard[i][k] != WHITE) {
+        //                     continue; // Skip non-empty cells
+        //                 }
+        //                 int x = i + dir[0];// -1 coming from here
+        //                 int y = k + dir[1];
+        //                 //System.out.println("Checking direction: " + dir[0] + "," + dir[1] + " from position: " + i + "," + k);
+        //                 if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
+        //                     continue;
+        //                 }
+        //                 if (reversiBoard[x][y] == BLANK) {
+        //                     continue;
+        //                 }
+        //                 if (reversiBoard[x][y] == BLACK) {
+        //                     ArrayList<String> positions = new ArrayList<>();
+        //                     positions.add("(" + (x + 1) + "," + (y + 1) + ")");
+        //                     hasOpponentPieceBetween = true;
+        //                     while (true) {
+        //                         x += dir[0];
+        //                         y += dir[1];
+        //                         if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
+        //                             break;
+        //                         }
+        //                         if (reversiBoard[x][y] == WHITE) {
+        //                             hasOpponentPieceBetween = false;
+        //                             break;
+        //                         } else if (reversiBoard[x][y] == BLANK) {
+        //                             if (hasOpponentPieceBetween) {
+        //                                 player2Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
+        //                                 reversiBoard[x][y] = 'X';
+        //                                 moveMap.put(player2Moves[row][col], positions);
+        //                             }
+        //                             hasOpponentPieceBetween = false;
+        //                             break;
+        //                         } else if (reversiBoard[x][y] == BLACK) {
+        //                             // continue searching
+        //                             positions.add("(" + (x + 1) + "," + (y + 1) + ")");
+        //                             continue;
+        //                         }
+        //                         break;
+        //                     }
+        //                 } else {
+        //                     hasOpponentPieceBetween = false;
+        //                     continue; // No opponent pieces in between
+        //                 }
+        //             }
+        //         }
         //     }
         // }
+        // return true; // Placeholder
+        //temp logic to test valid moves works but need to test fist function
+        if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
+            return false; // Out of bounds
+        }
 
-        // // If we found valid positions to flip, update the moveMap and valid moves
-        // if (!positionsToFlip.isEmpty()) {
-        //     String moveKey = "(" + row + "," + col + ")";
-        //     moveMap.put(moveKey, positionsToFlip);
-
-        //     if (playerColor == BLACK) {
-        //         player1Moves[r][c] = moveKey;
-        //         reversiBoard[r][c] = 'x'; // Mark valid move on board
-        //     } else {
-        //         player2Moves[r][c] = moveKey;
-        //         reversiBoard[r][c] = 'X'; // Mark valid move on board
-        //     }
-        //     return true;
-        // }
-
-        // return false;
+        int r = row - 1; // Convert to 0-based index
+        int c = col - 1;
+        // Target cell must be empty (don't check if it's a marker, check if it's TRULY blank or a marker)
+        if (reversiBoard[r][c] != BLANK && reversiBoard[r][c] != 'x' && reversiBoard[r][c] != 'X') {
+            return false; // Position has a piece already
+        }
+        char opp = (playerColor == BLACK) ? WHITE : BLACK;
+        ArrayList<String> positionsToFlip = new ArrayList<>();
+        // Check all 8 directions
+        for (int[] dir : directions) {
+            int x = r + dir[0];
+            int y = c + dir[1];
+            boolean foundOpponent = false;
+            ArrayList<String> tempPositions = new ArrayList<>();
+            // Traverse in the current direction
+            while (x >= 0 && x < BOARD && y >= 0 && y < BOARD && reversiBoard[x][y] == opp) {
+                foundOpponent = true;
+                tempPositions.add("(" + (x + 1) + "," + (y + 1) + ")");
+                x += dir[0];
+                y += dir[1];
+            }
+            // If we find a player's piece after opponent pieces, it's a valid move
+            if (foundOpponent && x >= 0 && x < BOARD && y >= 0 && y < BOARD && reversiBoard[x][y] == playerColor) {
+                positionsToFlip.addAll(tempPositions);
+            }
+        }
+        // If we found valid positions to flip, update the moveMap and valid moves
+        if (!positionsToFlip.isEmpty()) {
+            String moveKey = "(" + row + "," + col + ")";
+            // Merge positions if this move was already found from another direction
+            if (moveMap.containsKey(moveKey)) {
+                moveMap.get(moveKey).addAll(positionsToFlip);
+            } else {
+                moveMap.put(moveKey, positionsToFlip);
+            }
+            if (playerColor == BLACK) {
+                player1Moves[r][c] = moveKey;
+                // Only mark if it's currently blank
+                if (reversiBoard[r][c] == BLANK) {
+                    reversiBoard[r][c] = 'x';
+                }
+            } else {
+                player2Moves[r][c] = moveKey;
+                // Only mark if it's currently blank
+                if (reversiBoard[r][c] == BLANK) {
+                    reversiBoard[r][c] = 'X';
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     public static void printvalidMoves(int player) {
         if (player == 1) {
-            System.out.println("Player 1 Valid Moves: ");
+            System.out.print("Player 1 Valid Moves: ");
             for (int i = 0; i < BOARD; i++) {
                 for (int k = 0; k < BOARD; k++) {
                     if (player1Moves[i][k] != null) {
@@ -483,29 +494,53 @@ public class Reversi extends Thread {
 
         try (BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream())); PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true); BufferedReader console = new BufferedReader(new InputStreamReader(System.in));) {
             while (playingGame) {
+
+                // if (isGameOver()) {
+                //     String result = determineWinner();
+                //     switch (result) {
+                //         case "BLACK WINS":
+                //             out.println("YOU LOSE");
+                //             System.out.println("YOU WIN!");
+                //             break;
+                //         case "WHITE WINS":
+                //             out.println("YOU WIN");
+                //             System.out.println("YOU LOSE!");
+                //             break;
+                //         default:
+                //             out.println("DRAW");
+                //             System.out.println("DRAW!");
+                //             break;
+                //     }
+                //     playingGame = false;
+                //     break;
+                // }
                 setValidMoves(BLACK);
+                if(!hasValidMoves(BLACK)) {
+                    System.out.println("No valid moves available. You must PASS your turn.");
+                    out.println("PASS");
+                    determineWinner();
+                    System.exit(0);
+                }
                 printBoard(reversiBoard);
                 printvalidMoves(player);
+
                 System.out.println("Enter your move row,col: ex) 4,3");
                 System.out.print("Your Move: ");
                 String input = console.readLine();
+
+                //Error checking before sending move to oppenent
+                while (input == null || !input.contains(",")) {
+                    System.out.println("Invalid Move, try again.");
+                    System.out.print("Your Move: ");
+                    input = console.readLine();
+                }
+                //players move
                 int row = Integer.parseInt(input.split(",")[0]);
                 int col = Integer.parseInt(input.split(",")[1]);
-                //updateBoard(row, col, BLACK);
-                if (validMove(row, col, BLACK)) {
-                    updateBoard(row, col, BLACK);
-                } else {
-                    System.out.println("Invalid Move, try again.");
-                    input = console.readLine();
-                    row = Integer.parseInt(input.split(",")[0]);
-                    col = Integer.parseInt(input.split(",")[1]);
-                    while (!validMove(row, col, BLACK)) {
-                        System.out.println("Invalid Move, try again.");
-                        input = console.readLine();
-                        row = Integer.parseInt(input.split(",")[0]);
-                        col = Integer.parseInt(input.split(",")[1]);
-                    }
-                }
+
+                //update board with player 1 move
+                updateBoard(row, col, BLACK);
+                // Send move to player 2
                 out.println("MOVE:" + input);
                 System.out.println("Sent:" + input);
                 System.out.println("Wait:....");
@@ -529,57 +564,10 @@ public class Reversi extends Thread {
         int player = 2;
 
         //wait for move from player 1
-        // try (BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream())); PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true); BufferedReader console = new BufferedReader(new InputStreamReader(System.in));) {
-        //     while (playingGame) {
-        //         //setValidMoves(WHITE);
-        //         printBoard(reversiBoard);
-        //         //printvalidMoves(player);
-        //         System.out.println(" Wait for Player 1 move...\n");
-        //         String response = in.readLine();
-        //         response = checkMessage(response.toUpperCase(), console, BLACK);
-        //         if (response.contains("ERROR")) {
-        //             System.out.println(" ERROR has occured, exiting...");
-        //             out.println("ERROR");
-        //             System.exit(0);
-        //         }
-        //         System.out.println("PLAYER 1: " + response);
-        //         setValidMoves(WHITE);
-        //         printvalidMoves(player);
-        //         //updateBoard(port, port, BLACK);
-        //         printBoard(reversiBoard);
-        //         System.out.println("Enter your move row,col: ex) 4,3");
-        //         System.out.println("Your Move: ");
-        //         String input = console.readLine();
-        //         int row = Integer.parseInt(input.split(",")[0]);
-        //         int col = Integer.parseInt(input.split(",")[1]);
-        //         updateBoard(row, col, WHITE);
-        //         if (validMove(row, col, WHITE)) {
-        //             updateBoard(row, col, WHITE);
-        //         } else {
-        //             System.out.println("Invalid Move, try again.");
-        //             input = console.readLine();
-        //             if (validMove(row, col, WHITE)) {
-        //                 updateBoard(row, col, WHITE);
-        //             } else {
-        //                 System.out.println("Invalid Move again, exiting...");
-        //                 out.println("ERROR");
-        //                 System.exit(0);
-        //             }
-        //         }
-        //         out.println("MOVE:" + input);
-        //         System.out.println("Sent MOVE:" + input);
-        //         System.out.println(" Wait for Player 1\n");
-        //     }
-        // } catch (Exception e) {
-        //     System.out.println("Error has occured in game, exiting...");
-        //     System.exit(0);
-        // }
-        // Placeholder for player 2 logic
         try (BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream())); PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true); BufferedReader console = new BufferedReader(new InputStreamReader(System.in))) {
 
             while (playingGame) {
 
-                //printBoard(reversiBoard);
                 System.out.println("Waiting for Player 1's move...");
                 response = in.readLine();
                 response = checkMessage(response.toUpperCase(), console, BLACK); // Player 1's move is Black
@@ -587,10 +575,38 @@ public class Reversi extends Thread {
                     System.out.println("ERROR has occurred, exiting...");
                     out.println("ERROR");
                     System.exit(0);
+                } else if (response.equals("YOU WIN") || response.equals("YOU LOSE") || response.equals("DRAW")) {
+                    playingGame = false;
+                    break;
                 }
                 System.out.println("PLAYER 1: " + response);
 
+                if (isGameOver()) {
+                    String result = determineWinner();
+                    switch (result) {
+                        case "BLACK WINS":
+                            out.println("YOU LOSE");
+                            System.out.println("YOU WIN!");
+                            break;
+                        case "WHITE WINS":
+                            out.println("YOU WIN");
+                            System.out.println("YOU LOSE!");
+                            break;
+                        default:
+                            out.println("DRAW");
+                            System.out.println("DRAW!");
+                            break;
+                    }
+                    playingGame = false;
+                    break;
+                }
                 setValidMoves(WHITE); // Set valid moves for Player 2 (White)
+                if(!hasValidMoves(WHITE)) {
+                    System.out.println("No valid moves available. You must PASS your turn.");
+                    out.println("PASS");
+                    determineWinner();
+                    System.exit(0);
+                }
                 printBoard(reversiBoard);
                 printvalidMoves(player);
 
@@ -598,25 +614,19 @@ public class Reversi extends Thread {
                 System.out.println("Enter your move row,col: ex) 4,3");
                 System.out.print("Your Move: ");
                 String input = console.readLine();
+
+                //Error checking before sending move to oppenent
+                while (input == null || !input.contains(",")) {
+                    System.out.println("Invalid Move, try again.");
+                    System.out.print("Your Move: ");
+                    input = console.readLine();
+                }
+                //players move
                 int row = Integer.parseInt(input.split(",")[0]);
                 int col = Integer.parseInt(input.split(",")[1]);
-                // Validate and update the board for Player 2 (White)
-                if (validMove(row, col, WHITE)) {
-                    updateBoard(row, col, WHITE);
-                } 
-                // else {
-                //     System.out.println("Invalid Move, try again.");
-                //     input = console.readLine();
-                //     row = Integer.parseInt(input.split(",")[0]);
-                //     col = Integer.parseInt(input.split(",")[1]);
-                //     while (!validMove(row, col, WHITE)) {
-                //         System.out.println("Invalid Move, try again.");
-                //         input = console.readLine();
-                //         row = Integer.parseInt(input.split(",")[0]);
-                //         col = Integer.parseInt(input.split(",")[1]);
-                //     }
-                //     updateBoard(row, col, WHITE);
-                // }
+
+                //update board with player 2 move
+                updateBoard(row, col, WHITE);
 
                 // Send the move to Player 1
                 out.println("MOVE:" + input);
@@ -667,27 +677,145 @@ public class Reversi extends Thread {
             }
             return message; // valid MOVE message
         } else if (message.equals("PASS")) {
-            return message;  // Opponent has no valid moves
+
+            if (!hasValidMoves(color)) {
+                System.out.println("Opponent has no valid moves and passes their turn.");
+                String decision = determineWinner();
+                if (color == BLACK) {
+                    switch (decision) {
+                        case "BLACK WINS":
+                            System.out.println("Player 1 (BLACK) wins.");
+                            return "YOU WIN";
+                        case "WHITE WINS":
+                            System.out.println("Player 2 (WHITE) wins.");
+                            return "YOU LOSE";
+                        default:
+                            System.out.println("DRAW");
+                            return "DRAW";
+                    }
+                } else if (color == WHITE) {
+                    switch (decision) {
+                        case "BLACK WINS":
+                            System.out.println("Player 1 (BLACK) wins.");
+                            return "YOU LOSE";
+                        case "WHITE WINS":
+                            System.out.println("Player 2 (WHITE) wins.");
+                            return "YOU WIN";
+                        default:
+                            System.out.println("DRAW");
+                            return "DRAW";
+                    }
+                }
+
+            }
         } else if (message.equals("YOU WIN")) {
+            determineWinner();
             return message; // GAME OVER
         } else if (message.equals("YOU LOSE")) {
-            return message; // GAME OVER
+            determineWinner();// GAME OVER
         } else if (message.equals("DRAW")) {
-            return message; // GAME OVER
+            determineWinner();// GAME OVER
         } else if (message.equals("ERROR")) {
             return message; // Game will end
         } else {
-            System.out.println("Unknown message type.");
+            System.out.println("ERROR HAS BEEN SENT FROM OTHER PLAYER.");
             return "ERROR";
         }
-
+        return message;
     }
 
-}
+    //check if game is over
+    public static boolean isGameOver() {
+        // Check if board is full
+        boolean boardFull = true;
+        for (int i = 0; i < BOARD; i++) {
+            for (int j = 0; j < BOARD; j++) {
+                if (reversiBoard[i][j] == BLANK || reversiBoard[i][j] == 'x' || reversiBoard[i][j] == 'X') {
+                    boardFull = false;
+                    break;
+                }
+            }
+            if (!boardFull) {
+                break;
+            }
+        }
 
-// arraylist positions <inputmove> <positions it takes when done>
-// player moves
-// get arraylist from hashmap at that position
-// for each position 
-// if white now black
-// if black now white
+        if (boardFull) {
+            return true;
+        }
+
+        // Save the current board state
+        char[][] tempBoard = new char[BOARD][BOARD];
+        for (int i = 0; i < BOARD; i++) {
+            for (int j = 0; j < BOARD; j++) {
+                tempBoard[i][j] = reversiBoard[i][j];
+            }
+        }
+
+        // Check if both players have no valid moves
+        setValidMoves(BLACK);
+        boolean blackHasMoves = hasValidMoves(BLACK);
+
+        setValidMoves(WHITE);
+        boolean whiteHasMoves = hasValidMoves(WHITE);
+
+        // Restore the board state (remove markers added by setValidMoves)
+        for (int i = 0; i < BOARD; i++) {
+            for (int j = 0; j < BOARD; j++) {
+                if (reversiBoard[i][j] == 'x' || reversiBoard[i][j] == 'X') {
+                    reversiBoard[i][j] = tempBoard[i][j];
+                }
+            }
+        }
+
+        if(!blackHasMoves)
+        {
+            return true;
+        }
+        else if(!whiteHasMoves)
+        {
+            return true;
+
+        }
+        return !blackHasMoves && !whiteHasMoves;
+    }
+
+    //see if players stil have valid moves
+    public static boolean hasValidMoves(char playerColor) {
+        if (playerColor == BLACK) {
+            for (int i = 0; i < BOARD; i++) {
+                for (int j = 0; j < BOARD; j++) {
+                    if (player1Moves[i][j] != null) {
+                        return true;
+                    }
+                }
+            }
+        } else {
+            for (int i = 0; i < BOARD; i++) {
+                for (int j = 0; j < BOARD; j++) {
+                    if (player2Moves[i][j] != null) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // determine the winner
+    public static String determineWinner() {
+        int blackScore = score(reversiBoard, BLACK);
+        int whiteScore = score(reversiBoard, WHITE);
+
+        System.out.println("\n=== GAME OVER ===");
+        System.out.println("Final Score - BLACK: " + blackScore + " WHITE: " + whiteScore);
+
+        if (blackScore > whiteScore) {
+            return "BLACK WINS";
+        } else if (whiteScore > blackScore) {
+            return "WHITE WINS";
+        } else {
+            return "DRAW";
+        }
+    }
+}

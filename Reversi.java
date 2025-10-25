@@ -1,4 +1,15 @@
-
+/*
+ * Author: Dylan Bagwell
+ * Student ID: c34342837
+ * Course: SENG 4500 
+ * Assignment: 2
+ * Date: 03/10/2025
+ * Description: This is a networked Reversi game that uses UDP to find opponents and TCP to play the game.
+ * The game supports two players, where one player initiates a game request via UDP broadcast,
+ * and the other player responds to establish a TCP connection.
+ * The game board is displayed in the console, and players take turns making moves until the game concludes.
+ * Valid moves are indicated on the board, and the game enforces Reversi rules for flipping pieces.
+ */
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -8,6 +19,7 @@ import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -22,83 +34,69 @@ public class Reversi extends Thread {
     private static final char BLANK = ' ';
     private static final char BLACK = 'B';
     private static final char WHITE = 'W';
-    private static int port;// port passed in from console
+    private static int UDPport;// port passed in from console
     private static boolean playingGame = false;
     private static boolean TCPConnected = false;
     private static char[][] reversiBoard = new char[BOARD][BOARD];//Reversi Board
     private static String[][] player1Moves;
     private static String[][] player2Moves;
-    private static final int[][] directions = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
-    public static InetAddress gameAddress;// ip address recieved
+    private static final int[][] directions = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};// for checking moves
     public static String addressIp;//my address entered in the command line
-    public static String response;
-    public static String[] parts;
-    public static HashMap<String, ArrayList<String>> moveMap = new HashMap<>();
+    public static String response;// response from opponent
+    public static String[] parts;// split response parts
+    public static HashMap<String, ArrayList<String>> moveMap = new HashMap<>();//stores valid moves and positions to be flipped
 
     public static void main(String[] args) {
+
         if (args.length != 2) {
             System.out.println("[Expected]: <BROADCAST ADDRESS> <PORT>");
             System.exit(1);
         }
-        port = Integer.parseInt(args[1]);
-        //check port in range of 9000-9100
-        while (!portRange(port)) {
-            System.out.println("[PORT]: Must be within range 9000-9100");
-            System.out.print("Enter valid port: ");
-            port = Integer.parseInt(System.console().readLine());
-        }
-        System.out.println("Client: " + args[0] + " " + port);
+        UDPport = Integer.parseInt(args[1]);
 
-        addressIp = args[0];
+        System.out.println("Client: " + args[0] + " " + UDPport);
+
+        addressIp = args[0];//passed in broadcast address
+
         //listen on udp port for a tcp port to play on to be player2
-        listen(port); // listen for incoming connections
-        if (!TCPConnected) {
+        while (!TCPConnected) {
+
+            listen(UDPport); // listen for incoming UDP connections
+
             try {
-                DatagramSocket UDPSock = new DatagramSocket(null);
+                DatagramSocket UDPSock = new DatagramSocket();
                 UDPSock.setSoTimeout(WAIT_TIME);// time socked out after 5 seconds
                 UDPSock.setBroadcast(true);
-                udpBroadcast(UDPSock, port);
+                udpBroadcast(UDPSock, UDPport);
             } catch (Exception e) {
+                System.out.println("CONNECTION LOOP: " + e.getMessage());
                 System.exit(0);
             }
-        } // if no connection established then broadcast udp to find player1
-
-    }
-
-    public static boolean portRange(int portNum) {
-        boolean accept = false;
-        if (portNum <= 9100 && portNum >= 9000) {
-            accept = true;
-        }
-        return accept;
-    }
-
-    public static void tcpConnection(int port) {
-        try {
-            ServerSocket tcpSock = new ServerSocket(port);
-            tcpSock.setSoTimeout(WAIT_TIME);
-            gameSocket = tcpSock.accept();//wait for connection
-            System.out.println("[TCP CONNECTED]: " + addressIp + " on port " + port);
-            TCPConnected = true;
-        } catch (SocketException e) {
-            System.err.println("[TCP SOCKET ERROR]: TCP Timed out on " + port);
-            TCPConnected = false;
-        } catch (IOException e) {
-            System.err.println("[TCP IO EXCEPTION]: Could not connect to " + addressIp + " on port " + port);
+            // if no connection established then broadcast udp to find player1
         }
 
     }
 
+    /* 
+     *  @ parameters int port
+     *  Listens for incoming UDP packets on the specified port to establish a TCP connection for the game
+     */
     public static void listen(int port) {
-        // Listening for incoming TCP connections
+
+        // Listening for incoming UDP connections
+        System.out.println("Listening for UDP packets on port " + port + "...");
         try {
+
             DatagramSocket listenSock = new DatagramSocket(null);
+            listenSock.setBroadcast(true);
             listenSock.setSoTimeout(WAIT_TIME);// time socked out after 5 seconds
-            byte[] recieve = new byte[1024];//byte buffer to hold message
             listenSock.setReuseAddress(true);
-            listenSock.bind(new java.net.InetSocketAddress(port));
+            listenSock.bind(new InetSocketAddress(port));
+            byte[] recieve = new byte[1024];//byte buffer to hold message
+
             DatagramPacket udpPacket = new DatagramPacket(recieve, recieve.length);
-            listenSock.receive(udpPacket);
+
+            listenSock.receive(udpPacket);//get incoming packet
 
             String message = new String(udpPacket.getData(), 0, udpPacket.getLength());
             String[] parts = message.split(":");
@@ -107,27 +105,33 @@ public class Reversi extends Thread {
                 String senderAddress = udpPacket.getAddress().getHostAddress();
 
                 System.out.println("[UDP RECEIVED]: NEW GAME request from " + senderAddress + " on TCP port " + tcpPort);
+
                 // Attempt to establish TCP connection
                 gameSocket = new Socket(senderAddress, tcpPort);
                 System.out.println("[TCP CONNECTED]: " + senderAddress + " on port " + tcpPort);
-
+                listenSock.close();// close udp socket
                 TCPConnected = true;// we have connected 
                 playingGame = true; //we found a game to play
                 newBoard(reversiBoard);
                 // your player 2 so wait for p1 move
+                printBoard(reversiBoard);
                 System.out.println("You are Player 2 (White). Waiting for Player 1 (Black) to make a move...");
                 player2();
             }
 
         } catch (SocketException e) {
-            System.err.println("[UDP ERROR]: UDP Timed out on " + port);
+            System.err.println("[UDP TIMEOUT]: UDP Timed out on " + port);
         } catch (Exception e) {
-            System.err.println("[UDP ERROR]: Could not open UDP socket on port " + port);
+            System.err.println("[UDP]: " + e.getMessage());
         }
     }
 
+    /* 
+     *  @ parameters DatagramSocket UDPSock, int port
+     *  Broadcasts a NEW GAME request via UDP on the specified port and waits for a TCP connection
+     */
     public static void udpBroadcast(DatagramSocket UDPSock, int port) {
-        System.out.println("UDP BroadCasting");
+        System.out.println("[UDP BroadCasting]: Broadcasting NEW GAME request on port " + port);
         int random = ranPort();
 
         Thread UDPSend = new Thread(() -> {
@@ -138,26 +142,36 @@ public class Reversi extends Thread {
                 DatagramPacket sendPack = new DatagramPacket(send.getBytes(), send.length(), InetAddress.getByName(addressIp),
                         port);
 
-                System.out.print("Sending UDP Paket to " + port);
+                System.out.println("Sending UDP Paket to " + port);
                 while (!Thread.currentThread().isInterrupted() && !TCPConnected) {
                     UDPSock.send(sendPack);
+                    Thread.currentThread().sleep(1000); // wait a second before resending stop flooding
                 }
 
             } catch (Exception e) {
                 System.err.println("Could not open UDP socket on port " + port);
             }
+
         });
         UDPSend.start();
 
-        tcpConnection(random);
+        //
+        try {
+
+            ServerSocket tcpSock = new ServerSocket(random);
+            tcpSock.setSoTimeout(WAIT_TIME);
+            gameSocket = tcpSock.accept();//wait for connection
+            System.out.println("[TCP CONNECTED]: " + addressIp + " on port " + random);
+            TCPConnected = true;
+        } catch (SocketException e) {
+            System.err.println("[TCP SOCKET ERROR]: TCP Timed out on " + random);
+            TCPConnected = false;
+            UDPSend.interrupt();
+        } catch (IOException e) {
+            System.err.println("[TCP IO EXCEPTION]: Could not connect to " + addressIp + " on port " + random);
+        }
 
         if (TCPConnected) { // if we are player 1
-            UDPSend.interrupt();
-            try {
-                UDPSend.join();
-            } catch (InterruptedException e) {
-                System.out.println("Could not join UDP thread.");
-            }
 
             //initialize game 
             newBoard(reversiBoard);
@@ -169,6 +183,10 @@ public class Reversi extends Thread {
         }
     }
 
+    /* 
+     *  @ parameters Char[][] reeversiBoard
+     *  Prints the current state of the board to the console along with the current score for both players
+     */
     public static void printBoard(char[][] reversiBoard) {
         String[] Top = {"   1  ", "2  ", "3  ", "4  ", "5  ", "6  ", "7  ", "8  "};
         System.out.print("  ");
@@ -186,9 +204,6 @@ public class Reversi extends Thread {
             System.out.printf("%3d |", row + 1);  // <-- padded row number
             for (int col = 0; col < 8; col++) {
                 System.out.printf(" %c |", reversiBoard[row][col]);
-                // if (reversiBoard[row][col] == 'x' || reversiBoard[row][col] == 'X') {
-                //     reversiBoard[row][col] = BLANK; // reset valid move markers
-                // }
             }
             System.out.println();
 
@@ -201,14 +216,14 @@ public class Reversi extends Thread {
         }
 
         // display score
-        System.out.print("CURRENT SCORE " + "BLACK:" + score(reversiBoard, 'B'));
-        System.out.print(" WHITE:" + score(reversiBoard, 'W'));
+        System.out.print("CURRENT SCORE " + "BLACK: " + score(reversiBoard, 'B'));
+        System.out.print(" WHITE: " + score(reversiBoard, 'W') + "\n");
         System.out.println();
     }
 
     /*
-    *  @ parameters Char[][] , Char c
-    *  Scans the matrix to find and count how many pieces choosen color has
+     *   @ parameters Char[][] , Char c
+     *   Calculates and returns the score for the given color on the Reversi board
      */
     private static int score(char[][] reversiBoard, char color) {
         int score = 0;
@@ -222,6 +237,10 @@ public class Reversi extends Thread {
         return score;
     }
 
+    /*
+     *   @ parameters Char[][] reversiBoard
+     *   Initializes a new Reversi board with the starting configuration
+     */
     public static void newBoard(char[][] reversiBoard) {
         int middle = BOARD / 2; //get the middle of the board
         player1Moves = new String[BOARD][BOARD];
@@ -233,6 +252,19 @@ public class Reversi extends Thread {
             }
         }
 
+        // //test code for end game logic
+        // for (int i = 0; i < 5; i++) {
+        //     for (int k = 0; k < 7; k++) {
+        //         reversiBoard[i][k] = BLACK;
+        //     }
+        // }
+
+        // for (int i = 5; i < 8; i++) {
+        //     for (int k = 0; k < 7; k++) {
+        //         reversiBoard[i][k] = WHITE;
+        //     }
+        // }
+
         // Set up the initial Reversi configuration
         reversiBoard[middle - 1][middle - 1] = WHITE; // (3,3)
         reversiBoard[middle][middle] = WHITE;         // (4,4)
@@ -241,8 +273,12 @@ public class Reversi extends Thread {
 
     }
 
+    /*
+     *   @ parameters int row, int col, char playerColor
+     *   Updates the Reversi board with the player's move and flips the opponent's pieces accordingly
+     */
     public static void updateBoard(int row, int col, char playerColor) {
-
+        
         System.out.println("Updating board with move: " + row + "," + col + " for player: " + playerColor);
 
         // Clear ALL valid move markers before updating
@@ -254,7 +290,7 @@ public class Reversi extends Thread {
             }
         }
 
-        reversiBoard[row - 1][col - 1] = playerColor; // place the player's piece
+        reversiBoard[row - 1][col - 1] = playerColor; // place the player's piece to 0 based index
 
         // hashmap.get that position arraylist
         // hashmap <position> <arraylist>
@@ -263,24 +299,33 @@ public class Reversi extends Thread {
         ArrayList<String> posFlip = moveMap.get(key);//postions to be flipped
         if (posFlip != null) {
             for (String pos : posFlip) {
-                // int flipRow = Integer.parseInt(pos.split(",")[0].substring(1)) - 1; // Adjust for 0-based index
-                // int flipCol = Integer.parseInt(pos.split(",")[1].substring(0, pos.split(",")[1].length() - 1)) - 1; // Adjust for 0-based index
 
-                //test code
-                String[] coords = pos.replace("(", "").replace(")", "").split(",");
+                String[] coords = pos.replace("(", "").replace(")", "").split(",");//break down coords
                 int flipRow = Integer.parseInt(coords[0]) - 1; // Adjust for
                 int flipCol = Integer.parseInt(coords[1]) - 1; // Adjust for 0-based index
-                reversiBoard[flipRow][flipCol] = playerColor;
+                
+                //flip if it's the opponent's piece
+            
+                    reversiBoard[flipRow][flipCol] = playerColor;
+                
+                
             }
         }
-        printBoard(reversiBoard);
+        //printBoard(reversiBoard);
     }
 
+    /* 
+     *   Clears the valid move markers for both players
+     */
     public static void clearValidMoves() {
         player1Moves = new String[BOARD][BOARD];
         player2Moves = new String[BOARD][BOARD];
     }
 
+    /* 
+     *   @ parameters char playerColor
+     *   Sets the valid moves for the given player color on the Reversi board
+     */
     public static void setValidMoves(char playerColor) {
         clearValidMoves();
         moveMap.clear();
@@ -292,132 +337,31 @@ public class Reversi extends Thread {
         }
     }
 
+    /* 
+     *   @ parameters int row, int col, char playerColor
+     *   Checks if the move at the specified row and column is valid for the given player color
+     *   If valid, updates the moveMap and marks the valid move on the board
+     */
     public static boolean validMove(int row, int col, char playerColor) {
-
+        
         //for a color there is a horizontal vertical or diagonal line of opponent pieces
-        // if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
-        //     System.out.println("MOVE coordinates out of bounds.");
-        //     return false;
-        // }
-        // if (playerColor == BLACK) {
-        //     for (int i = 0; i < BOARD; i++) {
-        //         boolean hasOpponentPieceBetween = false;
-        //         for (int k = 0; k < BOARD; k++) {
-        //             for (int[] dir : directions) {
-        //                 if (reversiBoard[i][k] != BLACK) {
-        //                     continue; // Skip non-empty cells
-        //                 }
-        //                 int x = i + dir[0];// -1 coming from here
-        //                 int y = k + dir[1];
-        //                 if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-        //                     continue;
-        //                 }
-        //                 if (reversiBoard[x][y] == BLANK) {
-        //                     continue;
-        //                 }
-        //                 if (reversiBoard[x][y] == WHITE) {
-        //                     ArrayList<String> positions = new ArrayList<>();
-        //                     positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-        //                     hasOpponentPieceBetween = true;
-        //                     while (true) {
-        //                         x += dir[0];
-        //                         y += dir[1];
-        //                         if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-        //                             break;
-        //                         }
-        //                         if (reversiBoard[x][y] == BLACK) {
-        //                             hasOpponentPieceBetween = false;
-        //                             break;
-        //                         } else if (reversiBoard[x][y] == BLANK) {
-        //                             if (hasOpponentPieceBetween) {
-        //                                 player1Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
-        //                                 reversiBoard[x][y] = 'x'; // Mark valid move on board
-        //                                 moveMap.put(player1Moves[row][col], positions);
-        //                             }
-        //                             hasOpponentPieceBetween = false;
-        //                             break;
-        //                         } else if (reversiBoard[x][y] == WHITE) {
-        //                             // continue searching
-        //                             positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-        //                             continue;
-        //                         }
-        //                         break;
-        //                     }
-        //                 } else {
-        //                     hasOpponentPieceBetween = false;
-        //                     continue; // No opponent pieces in between
-        //                 }
-        //             }
-        //         }
-        //     }
-        // } else if (playerColor == WHITE) {
-        //     for (int i = 0; i < BOARD; i++) {
-        //         boolean hasOpponentPieceBetween = false;
-        //         for (int k = 0; k < BOARD; k++) {
-        //             for (int[] dir : directions) {
-        //                 if (reversiBoard[i][k] != WHITE) {
-        //                     continue; // Skip non-empty cells
-        //                 }
-        //                 int x = i + dir[0];// -1 coming from here
-        //                 int y = k + dir[1];
-        //                 //System.out.println("Checking direction: " + dir[0] + "," + dir[1] + " from position: " + i + "," + k);
-        //                 if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-        //                     continue;
-        //                 }
-        //                 if (reversiBoard[x][y] == BLANK) {
-        //                     continue;
-        //                 }
-        //                 if (reversiBoard[x][y] == BLACK) {
-        //                     ArrayList<String> positions = new ArrayList<>();
-        //                     positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-        //                     hasOpponentPieceBetween = true;
-        //                     while (true) {
-        //                         x += dir[0];
-        //                         y += dir[1];
-        //                         if ((x == -1 || y == -1) || (x >= BOARD || y >= BOARD)) {
-        //                             break;
-        //                         }
-        //                         if (reversiBoard[x][y] == WHITE) {
-        //                             hasOpponentPieceBetween = false;
-        //                             break;
-        //                         } else if (reversiBoard[x][y] == BLANK) {
-        //                             if (hasOpponentPieceBetween) {
-        //                                 player2Moves[x][y] = "(" + (x + 1) + "," + (y + 1) + ")";
-        //                                 reversiBoard[x][y] = 'X';
-        //                                 moveMap.put(player2Moves[row][col], positions);
-        //                             }
-        //                             hasOpponentPieceBetween = false;
-        //                             break;
-        //                         } else if (reversiBoard[x][y] == BLACK) {
-        //                             // continue searching
-        //                             positions.add("(" + (x + 1) + "," + (y + 1) + ")");
-        //                             continue;
-        //                         }
-        //                         break;
-        //                     }
-        //                 } else {
-        //                     hasOpponentPieceBetween = false;
-        //                     continue; // No opponent pieces in between
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-        // return true; // Placeholder
-        //temp logic to test valid moves works but need to test fist function
         if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
             return false; // Out of bounds
         }
 
         int r = row - 1; // Convert to 0-based index
         int c = col - 1;
+
         // Target cell must be empty (don't check if it's a marker, check if it's TRULY blank or a marker)
         if (reversiBoard[r][c] != BLANK && reversiBoard[r][c] != 'x' && reversiBoard[r][c] != 'X') {
             return false; // Position has a piece already
         }
+
+        
         char opp = (playerColor == BLACK) ? WHITE : BLACK;
         ArrayList<String> positionsToFlip = new ArrayList<>();
-        // Check all 8 directions
+
+        // Check directions
         for (int[] dir : directions) {
             int x = r + dir[0];
             int y = c + dir[1];
@@ -462,6 +406,10 @@ public class Reversi extends Thread {
         return false;
     }
 
+    /* 
+     *   @ parameters int player
+     *   Prints the valid moves for the specified player to the console
+     */
     public static void printvalidMoves(int player) {
         if (player == 1) {
             System.out.print("Player 1 Valid Moves: ");
@@ -487,6 +435,9 @@ public class Reversi extends Thread {
 
     }
 
+    /* 
+     *   Player 1's game loop
+     */
     public static void player1() {
         //first move logic here
         int player = 1;
@@ -495,27 +446,8 @@ public class Reversi extends Thread {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(gameSocket.getInputStream())); PrintWriter out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(gameSocket.getOutputStream())), true); BufferedReader console = new BufferedReader(new InputStreamReader(System.in));) {
             while (playingGame) {
 
-                // if (isGameOver()) {
-                //     String result = determineWinner();
-                //     switch (result) {
-                //         case "BLACK WINS":
-                //             out.println("YOU LOSE");
-                //             System.out.println("YOU WIN!");
-                //             break;
-                //         case "WHITE WINS":
-                //             out.println("YOU WIN");
-                //             System.out.println("YOU LOSE!");
-                //             break;
-                //         default:
-                //             out.println("DRAW");
-                //             System.out.println("DRAW!");
-                //             break;
-                //     }
-                //     playingGame = false;
-                //     break;
-                // }
                 setValidMoves(BLACK);
-                if(!hasValidMoves(BLACK)) {
+                if (!hasValidMoves(BLACK)) {
                     System.out.println("No valid moves available. You must PASS your turn.");
                     out.println("PASS");
                     determineWinner();
@@ -540,18 +472,27 @@ public class Reversi extends Thread {
 
                 //update board with player 1 move
                 updateBoard(row, col, BLACK);
+                //printBoard(reversiBoard);
+
                 // Send move to player 2
                 out.println("MOVE:" + input);
-                System.out.println("Sent:" + input);
+                System.out.println("Sent MOVE:" + input);
                 System.out.println("Wait:....");
                 response = in.readLine();
                 response = checkMessage(response.toUpperCase(), console, WHITE);
                 if (response.equals("ERROR")) {
-                    System.out.println(" ERROR has occured, exiting...");
+                    System.out.println(" ERROR has occured, exiting..." + response);
                     out.println("ERROR");
                     System.exit(0);
+                }else if (response.equals("YOU WIN") || response.equals("YOU LOSE") || response.equals("DRAW") || response.equals("PASS")) {
+                    if (response.equals("PASS")) {
+                        isGameOver();
+                    }
+                    System.out.println(response);
+                    System.exit(0);
                 }
-                System.out.println("PLAYER 2: " + response + "\n");
+
+                System.out.println("PLAYER 2 Sent: " + response);
             }
         } catch (Exception e) {
             System.out.println("Error has occured in game, exiting..." + e.getMessage());
@@ -560,6 +501,9 @@ public class Reversi extends Thread {
 
     }
 
+    /* 
+     *   Player 2's game loop
+     */
     public static void player2() {
         int player = 2;
 
@@ -568,6 +512,7 @@ public class Reversi extends Thread {
 
             while (playingGame) {
 
+                //printBoard(reversiBoard);
                 System.out.println("Waiting for Player 1's move...");
                 response = in.readLine();
                 response = checkMessage(response.toUpperCase(), console, BLACK); // Player 1's move is Black
@@ -575,39 +520,22 @@ public class Reversi extends Thread {
                     System.out.println("ERROR has occurred, exiting...");
                     out.println("ERROR");
                     System.exit(0);
-                } else if (response.equals("YOU WIN") || response.equals("YOU LOSE") || response.equals("DRAW")) {
-                    playingGame = false;
-                    break;
-                }
-                System.out.println("PLAYER 1: " + response);
-
-                if (isGameOver()) {
-                    String result = determineWinner();
-                    switch (result) {
-                        case "BLACK WINS":
-                            out.println("YOU LOSE");
-                            System.out.println("YOU WIN!");
-                            break;
-                        case "WHITE WINS":
-                            out.println("YOU WIN");
-                            System.out.println("YOU LOSE!");
-                            break;
-                        default:
-                            out.println("DRAW");
-                            System.out.println("DRAW!");
-                            break;
+                } else if (response.equals("YOU WIN") || response.equals("YOU LOSE") || response.equals("DRAW") || response.equals("PASS")) {
+                    if (response.equals("PASS")) {
+                        isGameOver();
                     }
-                    playingGame = false;
-                    break;
+                    System.exit(0);
                 }
+
                 setValidMoves(WHITE); // Set valid moves for Player 2 (White)
-                if(!hasValidMoves(WHITE)) {
+                if (!hasValidMoves(WHITE)) {
                     System.out.println("No valid moves available. You must PASS your turn.");
                     out.println("PASS");
                     determineWinner();
                     System.exit(0);
                 }
                 printBoard(reversiBoard);
+                System.out.println("PLAYER 1: " + response);
                 printvalidMoves(player);
 
                 // Player 2 makes a move
@@ -627,11 +555,12 @@ public class Reversi extends Thread {
 
                 //update board with player 2 move
                 updateBoard(row, col, WHITE);
+                printBoard(reversiBoard);
 
                 // Send the move to Player 1
                 out.println("MOVE:" + input);
                 System.out.println("Sent MOVE: " + input);
-                System.out.println("Waiting for Player 1...\n");
+                //System.out.println("Waiting for Player 1...\n");
             }
         } catch (Exception e) {
             System.out.println("Error has occurred in the game, exiting...");
@@ -639,6 +568,10 @@ public class Reversi extends Thread {
         }
     }
 
+    /* 
+     *   @ returns int
+     *   Generates and returns a random port number between 9000 and 9100
+     */
     public static int ranPort() {
         int gamePort = (int) ((Math.random() * 100) + 9000);
         return gamePort;
@@ -664,67 +597,81 @@ public class Reversi extends Thread {
             try {
                 int row = Integer.parseInt(moveCoords[0]);
                 int col = Integer.parseInt(moveCoords[1]);
-                System.out.println("Parsed MOVE coordinates: row=" + row + ", col=" + col);
+                System.out.println("Parsed MOVE coordinates: row = " + row + ", col = " + col);
                 if (row < 1 || row > BOARD || col < 1 || col > BOARD) {
                     System.out.println("MOVE coordinates out of bounds.");
                     return "ERROR";
                 }
-                validMove(row, col, color);
+                
+                if(!validMove(row, col, color))
+                {
+                    System.out.println("Recieved Invalid MOVE.");
+                    return "ERROR";
+                }
                 updateBoard(row, col, color);//sends move to update board
             } catch (NumberFormatException e) {
-                System.out.println("Non-numeric MOVE coordinates.");
+                System.out.println("Non-numeric MOVE: coordinates.");
                 return "ERROR";
             }
             return message; // valid MOVE message
         } else if (message.equals("PASS")) {
+            System.out.println("Opponent has passed their turn.");
 
-            if (!hasValidMoves(color)) {
-                System.out.println("Opponent has no valid moves and passes their turn.");
-                String decision = determineWinner();
-                if (color == BLACK) {
-                    switch (decision) {
-                        case "BLACK WINS":
-                            System.out.println("Player 1 (BLACK) wins.");
-                            return "YOU WIN";
-                        case "WHITE WINS":
-                            System.out.println("Player 2 (WHITE) wins.");
-                            return "YOU LOSE";
-                        default:
-                            System.out.println("DRAW");
-                            return "DRAW";
-                    }
-                } else if (color == WHITE) {
-                    switch (decision) {
-                        case "BLACK WINS":
-                            System.out.println("Player 1 (BLACK) wins.");
-                            return "YOU LOSE";
-                        case "WHITE WINS":
-                            System.out.println("Player 2 (WHITE) wins.");
-                            return "YOU WIN";
-                        default:
-                            System.out.println("DRAW");
-                            return "DRAW";
-                    }
+            String decision = determineWinner();//returns case string to determine winner
+
+            if (color == BLACK) {
+                switch (decision) {
+                    case "BLACK WINS":
+                        System.out.println("YOU LOSE");
+                        return "YOU WIN";
+                    case "WHITE WINS":
+                        System.out.println("YOU WIN");
+                        return "YOU LOSE";
+                    default:
+                        System.out.println("ITS A DRAW!");
+                        System.out.println("DRAW");
+                        return "DRAW";
                 }
-
+            } else if (color == WHITE) {
+                switch (decision) {
+                    case "BLACK WINS":
+                        System.out.println("YOU WIN");
+                        return "YOU WIN";
+                    case "WHITE WINS":
+                        System.out.println("YOU LOSE");
+                        return "YOU LOSE";
+                    default:
+                        System.out.println("DRAW");
+                        return "DRAW";
+                }
             }
-        } else if (message.equals("YOU WIN")) {
+
+        } else if (message.equals(
+                "YOU WIN")) {
             determineWinner();
             return message; // GAME OVER
-        } else if (message.equals("YOU LOSE")) {
+        } else if (message.equals(
+                "YOU LOSE")) {
             determineWinner();// GAME OVER
-        } else if (message.equals("DRAW")) {
+        } else if (message.equals(
+                "DRAW")) {
             determineWinner();// GAME OVER
-        } else if (message.equals("ERROR")) {
+        } else if (message.equals(
+                "ERROR")) {
+            System.out.println("Player sent ERROR: " + message);
             return message; // Game will end
         } else {
-            System.out.println("ERROR HAS BEEN SENT FROM OTHER PLAYER.");
+            System.out.println("Unknow message recieved: " + message);
             return "ERROR";
         }
+
         return message;
     }
 
-    //check if game is over
+    /*
+     *   @ returns boolean
+     *   Checks if the game is over by determining if the board is full or if both players have no valid moves
+     */
     public static boolean isGameOver() {
         // Check if board is full
         boolean boardFull = true;
@@ -742,9 +689,7 @@ public class Reversi extends Thread {
 
         if (boardFull) {
             return true;
-        }
-
-        // Save the current board state
+        } // Save the current board state
         char[][] tempBoard = new char[BOARD][BOARD];
         for (int i = 0; i < BOARD; i++) {
             for (int j = 0; j < BOARD; j++) {
@@ -768,19 +713,20 @@ public class Reversi extends Thread {
             }
         }
 
-        if(!blackHasMoves)
-        {
+        if (!blackHasMoves) {
             return true;
-        }
-        else if(!whiteHasMoves)
-        {
+        } else if (!whiteHasMoves) {
             return true;
 
         }
         return !blackHasMoves && !whiteHasMoves;
     }
 
-    //see if players stil have valid moves
+    /* 
+     *   @ parameters char playerColor
+     *   @ returns boolean
+     *   Checks if the specified player has any valid moves available
+     */
     public static boolean hasValidMoves(char playerColor) {
         if (playerColor == BLACK) {
             for (int i = 0; i < BOARD; i++) {
@@ -802,19 +748,25 @@ public class Reversi extends Thread {
         return false;
     }
 
-    // determine the winner
+    /* 
+     *   @ returns String
+     *   Determines the winner of the game based on the current scores and prints the result
+     */
     public static String determineWinner() {
         int blackScore = score(reversiBoard, BLACK);
         int whiteScore = score(reversiBoard, WHITE);
-
+        
         System.out.println("\n=== GAME OVER ===");
-        System.out.println("Final Score - BLACK: " + blackScore + " WHITE: " + whiteScore);
+        System.out.println("Final Score - BLACK: " + blackScore + " WHITE: " + whiteScore + "\n");
 
         if (blackScore > whiteScore) {
+            System.out.println("BLACK WINS\n");
             return "BLACK WINS";
         } else if (whiteScore > blackScore) {
+            System.out.println("WHITE WINS\n");
             return "WHITE WINS";
         } else {
+            System.out.println("DRAW\n");
             return "DRAW";
         }
     }
